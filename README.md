@@ -5,7 +5,7 @@ utilities for file operations
 copy files with progress bar
 
 ## expsel
-reveal files in Windows Explorer (Cygwi)
+reveal files in Windows Explorer (Cygwin)
 
 ## remove-bin-backups
 delete Emacs backup files in ~/bin
@@ -17,4 +17,4 @@ delete Emacs backup file in ~
 a bash wrapper for Sysinternal sigcheck (Cygwin)
 
 ## tardir
-create a tar ball from sub-folders of a folder
+create a tar ball from sub-folders in a folder
