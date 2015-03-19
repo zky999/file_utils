@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+_remove_backups() {
+    find -L "$1" -maxdepth 1 -type f -iname '*~' |while read f; do
+	if [[ -f "${f%'~'}" ]]; then
+	    rm -v "$f"
+	else
+	    echo "WARNNING: No original file found for \"$f\"." >&2
+	fi
+    done
+
+    find -L "$1" -maxdepth 1 -type f -iname '#*#' |while read f; do
+	bd="${f%/*}"
+
+	bn="$(basename "$f")"
+	bn="${bn%'#'}"
+	bn="${bn:1}"
+
+	file="${bd}/${bn}"
+	if [[ -f "$file" ]]; then
+	    rm -v "$f"
+	else
+	    echo "WARNNING: No original file found for \"$f\"." >&2
+	fi
+    done
+}
+
+if [[ "$(basename "$0")" == "remove-bin-backups" ]]; then
+    _remove_backups "${HOME}/bin"
+elif [[ "$(basename "$0")" == "remove-home-backups" ]]; then
+    _remove_backups "${HOME}"
+fi

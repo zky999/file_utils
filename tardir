@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# tar the sub-folders of a speicific directory into bz2 tarballs
+if [[ $# -gt 1 ]]; then
+    echo Usage: tardir [DIR]
+    exit 1
+fi
+
+OLD_DIR=$(pwd)
+WORK_DIR=.
+[[ -d "$1" ]] && { WORK_DIR="$1" && cd "$WORK_DIR"; }
+
+if find . -maxdepth 1 -type d -print |grep ' $'; then
+    echo "Error: The name(s) of the folder(s) above is/are ending with one or more spaces which will cuase serious problems on Windows."
+    echo "Exit"
+    exit 2
+fi
+
+DIRS=$(find . -maxdepth 1 -type d -print)
+#while IFS='\n' read -r DIR; do
+OLD_IFS="$IFS"
+IFS=$'\n'
+for DIR in $DIRS; do
+    if [[ $DIR != "." ]]; then
+	SRC_NAME=$(basename "$DIR")
+	TARGET_NAME="$(basename "$DIR" |tr ' ' '_').tar.bz2"
+	if [[ -f "$TARGET_NAME" ]]; then
+	    read -p "File \"$TARGET_NAME\" is already exist, are you sure to overwrite it? (Y/N)" -r -n 1 ANSWER
+	    echo
+	    case "$ANSWER" in
+		Y|y)
+		    rm -f "$TARGE_NAME"
+		    ;;
+		*)
+		    echo "Skipped taring \"$SRC_NAME\"."
+		    continue
+		    ;;
+	    esac
+	fi
+	tar cjvf "$TARGET_NAME" "$SRC_NAME"
+	[[ $? -ne 0 ]] && {
+	    printf "Tarballing %s to %s failed.\n" "$SRC_NAME" "$TARGET"
+	    exit 3
+	}
+    fi
+done
+IFS="$OLD_IFS"
+cd "$OLD_DIR"

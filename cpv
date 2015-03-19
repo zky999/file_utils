@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+# show progress info when copying files.
+# must have at least 2 parameters
+# Note: The parameters we obtain here are of being globbed by Bash, so the files
+# + we will process are all being counted.
+PARAM_NUM=$#
+if [[ $PARAM_NUM -lt 2 ]]; then
+    echo "cpv - Copying file(s) with progress"
+    echo -e "Usage:\n\tcpv <SRC_FILE> <DST_FILE>\n\tcpv <SRC_FILES...> <DST_DIR>"
+    exit 1
+fi
+
+# detect destination type by counting source files
+[[ $PARAM_NUM -eq 2 ]] && DST_TYPE=file # copy-to-file or copy-to-exist_dir mode
+[[ $PARAM_NUM -gt 2 ]] && DST_TYPE=dir # copy-to-dir mode
+
+# destination file(s)/directory
+PARAMS=("$@")
+DST=${PARAMS[$PARAM_NUM-1]}
+
+# in copy-to-file or copy-to-exist_dir mode
+if [[ $DST_TYPE == file ]]; then
+    SRC="$1"
+    # Check source file existence and whether can be copied from
+    [[ ! -e $SRC ]] && { printf "Error: Source file \"%s\" dose not exist.\nExit.\n" "$SRC" >&2 ; exit 2; }
+    [[ ! -f $SRC ]] && { printf "Error: Source file \"%s\" is not a regular file.\nExit.\n" "$SRC" >&2 ; exit 3; }
+
+    # Get source file size
+    SRC_SIZE=$(stat -c %s "$SRC")
+    [[ $? -ne 0 ]] && { printf "Error: Get the size of source file \"%s\" failed.\nExit\n" "$SRC" >&2 ; exit 4; }
+
+    # check destination file existence and whethter can be overwrite
+    if [[ -e $DST ]]; then
+	# if existing a regular file
+	if [[ -f $DST ]]; then
+	    printf "Warning: Destination file \"%s\" is already exist.\n" "$DST"
+	    printf "Do you want to overwrite it? (Y/N) "
+	    read -r -n 1 ANSWER
+	    echo
+	    case "$ANSWER" in
+		y|Y)
+		    rm -f "$DST"
+		    [[ $? -ne 0 ]] && { printf "Error: Overwrite destination file \"%s\" failed.\nExit\n" "$DST" >&2 ; exit 5; }
+		    ;;
+		*)
+		    printf "Info: User canceled to overwrite the existing destination file \"%s\".\nExit.\n" "$DST" >&2
+		    exit 6
+		    ;;
+	    esac
+	# copy-to-exist_dir mode
+	# copy one file to a directory
+	elif [[ -d $DST && -w $DST ]]; then
+	    DST="${DST%/}/$(basename "$SRC")"
+	# else if existing other type file
+	else
+	    printf "Error: Destination file \"%s\" is already exist as a \"non-regular\" file, and I'd better not to offer you an option to overwirte it. If you really want to overwrite it, do it manually.\nExit.\n" "$DST" >&2
+	    exit 7
+	fi
+    fi
+
+    # Check destination file's parent directory writable
+    PARENT_DIR=$(dirname "$DST")
+    [[ ! -w "$PARENT_DIR" ]] && {
+	printf "You have no permission to write file to the destination file's parent directory: \"%s\".\nExit.\n" "$PARENT_DIR" >&2
+	exit 8
+    }
+
+    # finally, copying
+    pv -W -s "$SRC_SIZE" >"$DST" <"$SRC"
+    [[ $? -ne 0 ]] && {
+	printf "Error: Copying \"%s\" to \"%s\" failed.\n" "$SRC" "$DST" >&2
+	exit 9
+    }
+# in copy-to-dir mode
+elif [[ $DST_TYPE == dir ]]; then
+    DST_DIR="${DST%/}"
+    # Check destination directory existence
+    if [[ -e $DST_DIR ]]; then
+	if [[ ! -d $DST_DIR ]]; then
+	    printf "There is already a file exist with the name \"%s\".\nExit.\n" "$DST_DIR"
+	    exit 10
+	elif [[ ! -w $DST_DIR ]]; then
+	    printf "You have no permission to write file to the destination file's parent directory: \"%s\".\nExit.\n" "$DST_DIR" >&2
+	    exit 11
+	fi
+    else
+	printf "Since the source are multiple files, the destination, \"%s\",  should be a directory which is not exist yet. Do you want to create it? (Y/N) " "$DST_DIR"
+	read -r -n 1 ANSWER
+	echo
+	case "$ANSWER" in
+	    y|Y)
+		mkdir -p  "$DST_DIR"
+		[[ $? -ne 0 ]] && { printf "Error: Create destination directory \"%s\" failed.\nExit\n" "$DST_DIR" >&2 ; exit 12; }
+		;;
+	    *)
+		printf "Info: User canceled to create the  destination directory \"%s\".\nExit.\n" "$DST_DIR" >&2
+		exit 13
+		;;
+	esac
+    fi
+
+    # for recording skipped files
+    declare -a SKIPPED_FILES
+    idx=0
+    # copy every source file to the destination directory
+    for ((i=0; i<$PARAM_NUM-1; i++)); do 
+	SRC="${PARAMS[$i]}"
+	DST="${DST_DIR}/$(basename "$SRC")"
+
+	# Below are the steps of copying one file to destionation whose codes are similar to the copy-to-file mode's.
+	# COPYING ONE FILE PROCESS BEGIN
+	
+	# Check source file existence and whether can be copied from
+	[[ ! -e $SRC ]] && {
+	    printf "Warning: Source file \"%s\" dose not exist.\nSkipped.\n" "$SRC" >&2
+	    SKIPPED_FILES[idx]="$SRC"
+	    ((idx++))
+	    continue
+	}
+	[[ ! -f $SRC ]] && {
+	    printf "Warning: Source file 8\"%s\" is not a regular file.\nSkipped.\n" "$SRC" >&2
+	    SKIPPED_FILES[idx]="$SRC"
+	    ((idx++))
+	    continue
+	}
+
+	# Get source file size
+	SRC_SIZE=$(stat -c %s "$SRC")
+	[[ $? -ne 0 ]] && {
+	    printf "Warning: Get the size of source file \"%s\" failed.\nSkipped.\n" "$SRC" >&2
+	    SKIPPED_FILES[idx]="$SRC"
+	    ((idx++))
+	    continue
+	}
+
+	# check destination file existence and whethter can be overwrite
+	if [[ -e $DST ]]; then
+	    	# if existing a regular file
+	    if [[ -f $DST ]]; then
+		printf "Warning: Destination file \"%s\" is already exist.\n" "$DST"
+		printf "Do you want to overwrite it? (Y/N) "
+		read -r -n 1 ANSWER
+		echo
+		case "$ANSWER" in
+		    y|Y)
+			rm -f "$DST"
+			[[ $? -ne 0 ]] && {
+			    printf "Error: Overwrite destination file \"%s\" failed.\nSkipped.\n" "$DST" >&2
+			    SKIPPED_FILES[idx]="$SRC"
+			    ((idx++))
+			    continue
+			}
+			;;
+		    *)
+			printf "\nInfo: User canceled to overwrite the existing destination file \"%s\".\nSkipped.\n" "$DST" >&2
+			SKIPPED_FILES[idx]="$SRC"
+			((idx++))
+			continue
+			;;
+		esac
+            # else if existing other type file
+	    else
+		printf "Error: Destination file \"%s\" is already exist as a \"non-regular\" file, and I'd better not to offer you an option to overwirte it. If you really want to overwrite it, do it manually.\nSkipped.\n" "$DST" >&2
+		SKIPPED_FILES[idx]="$SRC"
+		((idx++))
+		continue
+	    fi
+	fi
+	
+	# finally, copying
+	pv -s "$SRC_SIZE" >"$DST" <"$SRC"
+	[[ $? -ne 0 ]] && {
+	    printf "Error: Copying \"%s\" to \"%s\" failed.\nSkipped.\n" "$SRC" "$DST" >&2
+	    SKIPPED_FILES[idx]="$SRC"
+	    ((idx++))
+	    continue
+	}
+	# COPY ONE FILE PROCESS ENDS
+    done
+
+	# show copying results
+    if [[ ${#SKIPPED_FILES[@]} -ne 0 ]]; then
+	printf "Finished copying with %d skipped files.\n" $i
+	printf "Below are the files were skipped for some reason:\n"
+	for ((i=0; i<${#SKIPPED_FILES[@]}; i++)); do
+	    printf "%s\n" "${SKIPPED_FILES[$i]}"
+	done
+    else
+	((SUCCESS_COPIED=$PARAM_NUM-1))
+	printf "Successfully copied %d files.\n" "$SUCCESS_COPIED"
+    fi
+# this should not happen
+else 
+    echo "We should not be here"
+fi
