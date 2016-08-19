@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 if [[ $# -eq 0 ]]; then
     while read file; do
-   "$(basename $0)" "$file"
+   	"$(basename $0)" "$file"
     done
 else
-    for p in "$@"; do
-	explorer /select, "$(cygpath -w "$p")"
-    done
+	for p in "$@"; do
+		explorer /select, "$(cygpath -w "$p")"
+	done
 fi
